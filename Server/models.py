@@ -1,9 +1,7 @@
-from flask import Flask, request, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import MetaData
 from sqlalchemy.orm import validates, relationship
 from sqlalchemy_serializer import SerializerMixin
-from datetime import datetime
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_bcrypt import Bcrypt
 import re
@@ -13,13 +11,7 @@ metadata = MetaData(naming_convention={
 })
 
 db = SQLAlchemy(metadata=metadata)
-
-app = Flask(__name__)
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///app.db'
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-
-db.init_app(app)
-bcrypt = Bcrypt() 
+bcrypt = Bcrypt()
 
 class Category(db.Model, SerializerMixin):
     __tablename__ = 'categories'
@@ -28,7 +20,7 @@ class Category(db.Model, SerializerMixin):
     name = db.Column(db.String(50), nullable=False, unique=True)
     animals = db.relationship('Animal', backref='category', lazy=True)
 
-    def _repr_(self):
+    def __repr__(self):
         return f'<Category {self.name}>'
     
 class Animal(db.Model, SerializerMixin):
@@ -38,13 +30,13 @@ class Animal(db.Model, SerializerMixin):
     type = db.Column(db.String(50), nullable=False)
     breed = db.Column(db.String(50), nullable=False)
     price = db.Column(db.Float, nullable=False)
-    status = db.Column(db.String(20), default='Available')  # e.g., Available, Sold Out, Pending
+    status = db.Column(db.String(20), default='Available')
     description = db.Column(db.Text)
     farmer_id = db.Column(db.Integer, db.ForeignKey('farmers.id'))
     image_url = db.Column(db.String(255))
     category_id = db.Column(db.Integer, db.ForeignKey('categories.id'))
 
-    @validates(price)
+    @validates('price')
     def validate_price(self, key, price):
         if price < 0:
             raise ValueError("Price must be non-negative.")
@@ -56,10 +48,14 @@ class Animal(db.Model, SerializerMixin):
         if status not in valid_statuses:
             raise ValueError("Invalid status for animal.")
         return status
+    
+    serialize_rules = ('-farmer_id', '-category_id') 
 
-    def _repr_(self):
+    def serialize(self):
+        return {c: getattr(self, c) for c in self.__table__.columns.keys() if c not in self.serialize_rules}
+    
+    def __repr__(self):
         return f'<Animal {self.type} {self.breed} in category {self.category.name}>'
-
     
 class Farmer(db.Model, SerializerMixin):
     __tablename__ = 'farmers'
@@ -88,7 +84,7 @@ class Farmer(db.Model, SerializerMixin):
     
     @validates('password_hash')
     def validate_password(self, key, password):
-        password_regex = r'(?=.\d)(?=.[a-z])(?=.*[A-Z]).{8,}'  # Example: At least one number, one lowercase and one uppercase letter, and at least 8 characters
+        password_regex = r'(?=.*\d)(?=.*[a-z])(?=.*[A-Z]).{8,}'
         if not re.match(password_regex, password):
             raise ValueError("Password must contain at least 8 characters, including one number, one lowercase and one uppercase letter.")
         return generate_password_hash(password)
@@ -101,7 +97,7 @@ class Farmer(db.Model, SerializerMixin):
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)
 
-    def _repr_(self):
+    def __repr__(self):
         return f'<Farmer {self.username} at {self.farm_name}>'
     
 class User(db.Model, SerializerMixin):
@@ -112,7 +108,7 @@ class User(db.Model, SerializerMixin):
     email = db.Column(db.String(100), unique=True, nullable=False)
     password_hash = db.Column(db.String(128))
     address = db.Column(db.String(255))
-    role = db.Column(db.String(10), nullable=False)  # Add role field
+    role = db.Column(db.String(10), nullable=False)
     carts = db.relationship('Cart', backref='user', lazy=True)
 
     @validates('username')
@@ -131,7 +127,7 @@ class User(db.Model, SerializerMixin):
     
     @validates('password_hash')
     def validate_password(self, key, password):
-        password_regex = r'(?=.\d)(?=.[a-z])(?=.*[A-Z]).{8,}'  # Example: At least one number, one lowercase and one uppercase letter, and at least 8 characters
+        password_regex = r'(?=.*\d)(?=.*[a-z])(?=.*[A-Z]).{8,}'
         if not re.match(password_regex, password):
             raise ValueError("Password must contain at least 8 characters, including one number, one lowercase and one uppercase letter.")
         return generate_password_hash(password)
@@ -144,23 +140,23 @@ class User(db.Model, SerializerMixin):
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)
 
-    def _repr_(self):
+    def __repr__(self):
         return f'<User {self.username}>'
     
-class Cart(db.Model, SerializerMixin):
+class Cart(db.Model):
     __tablename__ = 'carts'
 
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'))
     total_price = db.Column(db.Float)
-    status = db.Column(db.String(20), default='Pending')  # e.g., Pending, Confirmed, Rejected
+    status = db.Column(db.String(20), default='Pending')
     order_date = db.Column(db.DateTime, onupdate=db.func.now())
     items = db.relationship('CartItem', backref='cart', lazy=True)
 
-    def _repr_(self):
+    def __repr__(self):
         return f'<Cart {self.id} by User {self.user_id}>'
 
-class CartItem(db.Model, SerializerMixin):
+class CartItem(db.Model):
     __tablename__ = 'cart_items'
 
     id = db.Column(db.Integer, primary_key=True)
@@ -169,5 +165,5 @@ class CartItem(db.Model, SerializerMixin):
     quantity = db.Column(db.Integer, default=1)
     unit_price = db.Column(db.Float)
     
-    def _repr_(self):
+    def __repr__(self):
         return f'<CartItem for Cart {self.cart_id}, Animal {self.animal_id}>'
