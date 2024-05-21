@@ -189,7 +189,8 @@ def search_animals_by_category():
     if category:
         animals = Animal.query.filter_by(category_id=category.id).all()
         return jsonify([animal.serialize() for animal in animals]), 200
-    return jsonify({'message': 'Category not found'}), 404
+    else:
+        return jsonify({'message': 'Category not found'}), 404
 
 @app.route('/categories', methods=['POST'])
 @jwt_required()
