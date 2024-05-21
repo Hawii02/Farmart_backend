@@ -182,7 +182,7 @@ def list_animals():
     animals = Animal.query.all()
     return jsonify([animal.serialize() for animal in animals]), 200
 
-@app.route('/animals/by_category', methods=['GET'])
+@app.route('/animals/category', methods=['GET'])
 def search_animals_by_category():
     category_name = request.args.get('category')
     category = Category.query.filter_by(name=category_name).first()
