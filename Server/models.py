@@ -20,6 +20,12 @@ class Category(db.Model, SerializerMixin):
     name = db.Column(db.String(50), nullable=False, unique=True)
     animals = db.relationship('Animal', backref='category', lazy=True)
 
+    def serialize(self):
+        return {
+            'id': self.id,
+            'name': self.name,
+        }
+
     def __repr__(self):
         return f'<Category {self.name}>'
     

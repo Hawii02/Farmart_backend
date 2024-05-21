@@ -182,15 +182,18 @@ def list_animals():
     animals = Animal.query.all()
     return jsonify([animal.serialize() for animal in animals]), 200
 
-@app.route('/animals/category', methods=['GET'])
-def search_animals_by_category():
-    category_name = request.args.get('category')
-    category = Category.query.filter_by(name=category_name).first()
-    if category:
-        animals = Animal.query.filter_by(category_id=category.id).all()
-        return jsonify([animal.serialize() for animal in animals]), 200
-    else:
-        return jsonify({'message': 'Category not found'}), 404
+@app.route('/animals/categories', methods=['GET'])
+# def search_animals_by_category(id):
+    # category = Category.query.filter(Category.id==id).first()
+    # if category:
+    #     animals = Animal.query.filter_by(category_id=category.id).all()
+    #     return jsonify([animal.serialize() for animal in animals]), 200
+    # else:
+    #     return jsonify({'message': 'Category not found'}), 404
+
+def list_categories():
+    categories = Category.query.all()
+    return jsonify([category.serialize() for category in categories]), 200
 
 @app.route('/categories', methods=['POST'])
 @jwt_required()
