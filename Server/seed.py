@@ -39,7 +39,7 @@ def seed_data():
                    farmer_id=farmer_id, category_id=category_mapping['Poultry']),
             Animal(type='geese', breed='African', price=2500, status='Available',
                    description='meat producers and ornamental birds',
-                   image_url='https://img.hobbyfarms.com/wp-content/uploads/19192957/african-goose_Peter-Barker-Flickr.jpg',
+                   image_url='https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQoREayuCoIEl4HZgH3_GWNwMvREiOYqXptyLqjd8mEVA&s',
                    farmer_id=farmer_id, category_id=category_mapping['Poultry']),
             Animal(type='duck', breed='Pekin', price=1800, status='Available',
                    description='snowy white',
