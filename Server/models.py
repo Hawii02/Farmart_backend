@@ -71,7 +71,8 @@ class Farmer(db.Model, SerializerMixin):
     email = db.Column(db.String(100), unique=True, nullable=False)
     password_hash = db.Column(db.String(128))
     farm_name = db.Column(db.String(100))
-    location = db.Column(db.String(100))
+    address = db.Column(db.String(255))
+    role = db.Column(db.String(10), nullable=False)
     animals = db.relationship('Animal', backref='farmer', lazy=True)
 
     @validates('username')
