@@ -105,7 +105,7 @@ class Farmer(db.Model, SerializerMixin):
         return check_password_hash(self.password_hash, password)
 
     def __repr__(self):
-        return f'<Farmer {self.username} at {self.farm_name}>'
+        return f'<Farmer {self.username}>'
     
 class User(db.Model, SerializerMixin):
     __tablename__ = 'users'
