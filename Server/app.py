@@ -116,6 +116,8 @@ def login():
 
         app.logger.debug(f"Found user: {user}")
 
+
+
         # Check if the provided password matches the stored password hash
         # try:
         #     password_match = bcrypt.check_password_hash(user.password_hash, password)
@@ -139,6 +141,30 @@ def login():
     except Exception as e:
         app.logger.error(f"Unexpected error: {str(e)}", exc_info=True)
         return jsonify({'message': 'Login error', 'error': str(e)}), 500
+
+
+# @app.route('/login', methods=['POST'])
+# def login():
+#         data = request.get_json()
+#         print(data)
+        
+#         # email = data.get("email")
+#         password_hash = str(data.get("password"))
+#         username = data.get("username")
+#         # role = data.get("role").lower()
+
+#         user = User.query.filter_by(username=username).first()
+
+#         if user is None:
+#             return jsonify({'error': 'Unauthorized'}), 401
+
+#         if not bcrypt.check_password_hash(user.password_hash, password_hash):
+#             return jsonify({'error': 'Unauthorized, incorrect password'}), 401
+        
+#         access_token = create_access_token(identity=username)
+#         user.access_token = access_token
+#         return jsonify ({'message': 'Username added successfully'}), 201
+
 
 
 @app.route('/farmer/animals', methods=['POST'])
