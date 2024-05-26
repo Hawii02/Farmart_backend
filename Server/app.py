@@ -56,115 +56,51 @@ def validate_password(password):
 @app.route('/register', methods=['POST'])
 def register():
     data = request.get_json()
-    print("Received data:", data)
-
     username = data.get('username')
     email = data.get('email')
-    password = data.get('password')  # Change to password instead of password_hash
-    address = data.get('address', '')
+    password = data.get('password')
     role = data.get('role', 'user').lower()
 
-    if not username:
-        return jsonify({'message': 'Username is required'}), 400
-    if not email:
-        return jsonify({'message': 'Email is required'}), 400
-    if not validate_email(email):
-        return jsonify({'message': 'Invalid email format'}), 400
-    if not password:
-        return jsonify({'message': 'Password is required'}), 400
-    if not validate_password(password):
-        return jsonify({'message': 'Password does not meet requirements'}), 400
-    if role not in ['farmer', 'user']:
+    if role not in ['user', 'farmer']:
         return jsonify({'message': 'Invalid role specified'}), 400
-    
-    # Generate a password hash
-    password_hash = bcrypt.generate_password_hash(password).decode('utf-8')
 
-    new_user = User(
-        username=username,
-        email=email,
-        password_hash=password_hash,
-        address=address,
-        role=role
-    )
+    existing_user = User.query.filter_by(username=username).first() or Farmer.query.filter_by(username=username).first()
+    if existing_user:
+        return jsonify({'message': 'Username already exists'}), 409
 
-    db.session.add(new_user)
+    if role == 'farmer':
+        user = Farmer(username=username, email=email, role=role)
+    else:
+        user = User(username=username, email=email, role=role)
+
+    user.set_password(password)
+    db.session.add(user)
     db.session.commit()
-
-    return jsonify({'message': 'Registration successful'}), 200
-
+    return jsonify({'message': 'Registration successful'}), 201
 
 @app.route('/login', methods=['POST'])
 def login():
     data = request.get_json()
-    app.logger.debug(f"Login attempt with data: {data}")
+    username = data.get('username')
+    password = data.get('password')
+    role = data.get('role', 'user').lower()
 
-    try:
-        username = data['username']
-        password = data['password']
-        role = data['role'].lower()
+    user = User.query.filter_by(username=username, role=role).first() if role == 'user' else Farmer.query.filter_by(username=username, role=role).first()
 
-        if not username or not password:
-            return jsonify({'message': 'Username and password are required'}), 400
+    if not user:
+        return jsonify({'message': 'User not found or role mismatch'}), 401
 
-        user_class = Farmer if role == 'farmer' else User
-        user = user_class.query.filter_by(username=username).first()
+    if not user.check_password(password):
+        return jsonify({'message': 'Invalid password'}), 401
 
-        if not user:
-            app.logger.debug(f"User not found: {username}")
-            return jsonify({'message': 'User not found'}), 404
-
-        app.logger.debug(f"Found user: {user}")
-
-
-
-        # Check if the provided password matches the stored password hash
-        # try:
-        #     password_match = bcrypt.check_password_hash(user.password_hash, password)
-        # except ValueError as e:
-        #     app.logger.error(f"Password hash check failed: {e}")
-        #     return jsonify({'message': 'Invalid password hash'}), 500
-
-        # if not password_match:
-        #     app.logger.debug(f"Invalid password for user: {username}")
-        #     return jsonify({'message': 'Invalid password'}), 401
-
-        if user.role != role:
-            app.logger.debug(f"Role mismatch for user: {username}. Expected: {role}, Found: {user.role}")
-            return jsonify({'message': 'Role does not match'}), 401
-
-        access_token = create_access_token(identity={'id': user.id, 'role': role, 'username': user.username})
-        return jsonify(access_token=access_token, id=user.id, username=username, role=role), 200
-    except KeyError as e:
-        app.logger.error(f"Missing data in request: {e}")
-        return jsonify({'message': 'Missing data in request', 'error': str(e)}), 400
-    except Exception as e:
-        app.logger.error(f"Unexpected error: {str(e)}", exc_info=True)
-        return jsonify({'message': 'Login error', 'error': str(e)}), 500
-
-
-# @app.route('/login', methods=['POST'])
-# def login():
-#         data = request.get_json()
-#         print(data)
-        
-#         # email = data.get("email")
-#         password_hash = str(data.get("password"))
-#         username = data.get("username")
-#         # role = data.get("role").lower()
-
-#         user = User.query.filter_by(username=username).first()
-
-#         if user is None:
-#             return jsonify({'error': 'Unauthorized'}), 401
-
-#         if not bcrypt.check_password_hash(user.password_hash, password_hash):
-#             return jsonify({'error': 'Unauthorized, incorrect password'}), 401
-        
-#         access_token = create_access_token(identity=username)
-#         user.access_token = access_token
-#         return jsonify ({'message': 'Username added successfully'}), 201
-
+    access_token = create_access_token(identity={'id': user.id, 'role': user.role, 'username': user.username})
+    return jsonify({
+        'message': 'Login successful',
+        'access_token': access_token,
+        'user_id': user.id,
+        'username': user.username,
+        'role': user.role
+    }), 200
 
 
 @app.route('/farmer/animals', methods=['POST'])

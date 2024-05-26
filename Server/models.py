@@ -89,27 +89,27 @@ class Farmer(db.Model, SerializerMixin):
             raise ValueError("Invalid email address")
         return address
     
-    @validates('password_hash')
-    def validate_password(self, key, password):
+    serialize_rules = ('-password_hash',)
+
+    @validates('password')
+    def validate_password(self, key, password): 
         password_regex = r'(?=.*\d)(?=.*[a-z])(?=.*[A-Z]).{8,}'
         if not re.match(password_regex, password):
             raise ValueError("Password must contain at least 8 characters, including one number, one lowercase and one uppercase letter.")
-        return generate_password_hash(password)
-    
-    serialize_rules = ('-password_hash',)
+        return password  
 
     def set_password(self, password):
-        self.password_hash = generate_password_hash(password)
+        self.password_hash = bcrypt.generate_password_hash(password).decode('utf-8')
 
     def check_password(self, password):
-        return check_password_hash(self.password_hash, password)
+        return bcrypt.check_password_hash(self.password_hash, password)
 
     def __repr__(self):
-        return f'<Farmer {self.username}>'
-    
-class User(db.Model, SerializerMixin):
-    __tablename__ = 'users'
+        return f'<Farmer {self.username} at {self.farm_name}>'
 
+    
+class User(db.Model):
+    __tablename__ = 'users'
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(50), unique=True, nullable=False)
     email = db.Column(db.String(100), unique=True, nullable=False)
@@ -130,22 +130,22 @@ class User(db.Model, SerializerMixin):
     def validate_email(self, key, address):
         if not re.match(r"[^@]+@[^@]+\.[^@]+", address):
             raise ValueError("Invalid email address")
-        return address
-    
-    @validates('password_hash')
-    def validate_password(self, key, password):
+        return address    
+
+    @validates('password')
+    def validate_password(self, key, password): 
         password_regex = r'(?=.*\d)(?=.*[a-z])(?=.*[A-Z]).{8,}'
         if not re.match(password_regex, password):
             raise ValueError("Password must contain at least 8 characters, including one number, one lowercase and one uppercase letter.")
-        return generate_password_hash(password)
+        return password  # Just return the password here
 
     serialize_rules = ('-password_hash',)
 
     def set_password(self, password):
-        self.password_hash = generate_password_hash(password)
+        self.password_hash = bcrypt.generate_password_hash(password).decode('utf-8')
 
     def check_password(self, password):
-        return check_password_hash(self.password_hash, password)
+        return bcrypt.check_password_hash(self.password_hash, password)
 
     def __repr__(self):
         return f'<User {self.username}>'
