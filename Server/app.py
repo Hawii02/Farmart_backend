@@ -1,0 +1,264 @@
+from flask import Flask, request, jsonify
+from flask_sqlalchemy import SQLAlchemy
+from flask_migrate import Migrate
+from flask_cors import CORS
+from flask_bcrypt import Bcrypt
+from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
+import os
+
+# SQLAlchemy and MetaData setup
+from sqlalchemy import MetaData
+metadata = MetaData(naming_convention={
+    "fk": "fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s",
+})
+
+db = SQLAlchemy(metadata=metadata)
+
+# Initialize Flask app
+app = Flask(__name__)
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get("DB_URI", f"sqlite:///{os.path.join(os.path.abspath(os.path.dirname(__file__)), 'app.db')}")
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config['SECRET_KEY'] = os.urandom(16).hex()  # It's better to set a stable secret key for production
+app.config['JWT_SECRET_KEY'] = os.urandom(16).hex()  # Stable key required for JWT in production as well
+CORS(app)
+bcrypt = Bcrypt(app)
+jwt = JWTManager(app)
+migrate = Migrate(app, db)
+
+# Ensure db is initialized after app configuration
+db.init_app(app)
+bcrypt.init_app(app)
+
+from models import User, Farmer, Category, Cart, CartItem, Animal
+
+@app.route('/register', methods=['POST'])
+def register():
+    data = request.get_json()
+    username = data.get('username')
+    email = data.get('email')
+    password = data.get('password')
+    role = data.get('role', 'user').lower()
+
+    if role not in ['user', 'farmer']:
+        return jsonify({'message': 'Invalid role specified'}), 400
+
+    existing_user = User.query.filter_by(username=username).first() or Farmer.query.filter_by(username=username).first()
+    if existing_user:
+        return jsonify({'message': 'Username already exists'}), 409
+
+    if role == 'farmer':
+        user = Farmer(username=username, email=email, role=role)
+    else:
+        user = User(username=username, email=email, role=role)
+
+    user.set_password(password)
+    db.session.add(user)
+    db.session.commit()
+    return jsonify({'message': 'Registration successful'}), 201
+
+@app.route('/login', methods=['POST'])
+def login():
+    data = request.get_argv
+    username = data.get('username')
+    password = data.get('password')
+    role = data.get('role', 'user').lower()
+
+    if role == 'farmer':
+        user = Farmer.query.filter_by(username=username, role=role).first()
+    else:
+        user = User.query.filter_by(username=username, role=role).first()
+
+    if user and user.check_password(password):
+        access_token = create_access_token(identity={'id': user.id, 'role': user.role, 'username': user.username})
+        return jsonify({
+            'message': 'Login successful',
+            'access_token': access_token,
+            'user_id': user.id,
+            'username': user.username,
+            'role': user.role
+        }), 200
+    else:
+        return jsonify({'message': 'Invalid username or password'}), 401
+
+
+@app.route('/farmer/animals', methods=['POST'])
+@jwt_required()
+def add_animal():
+    claims = get_jwt_identity()
+    if claims['role'] != 'farmer':
+        return jsonify({'message': 'Unauthorized'}), 403
+    new_animal = Animal(
+        type=request.json['type'],
+        breed=request.json['breed'],
+        price=request.json['price'],
+        description=request.json['description'],
+        farmer_id=claims['id'],
+        status='Available'
+    )
+    if 'image_url' in request.json:
+       new_animal.image_url = request.json['image_url']
+    db.session.add(new_animal)
+    db.session.commit()
+    return jsonify({'message': 'Animal added successfully'}), 201
+  
+@app.route('/farmer/animals/<int:animal_id>', methods=['PUT'])
+@jwt_required()
+def update_animal(animal_id):
+    claims = get_jwt_identity()
+    animal = Animal.query.filter_by(id=animal_id, farmer_id=claims['id']).first()
+    if animal:
+        animal.type = request.json.get('type', animal.type)
+        animal.breed = request.json.get('breed', animal.breed)
+        animal.price = request.json.get('price', animal.price)
+        animal.description = request.json.get('description', animal.description)
+        animal.image_url = request.json['image_url']
+        animal.status = request.json.get('status', animal.status)
+        db.session.commit()
+        return jsonify({'message': 'Animal updated successfully'}), 200
+    return jsonify({'message': 'Animal not found'}), 404
+
+@app.route('/animals', methods=['GET'])
+def list_animals():
+    animals = Animal.query.all()
+    return jsonify([animal.serialize() for animal in animals]), 200
+
+# LIst animal categories
+@app.route('/animals/categories', methods=['GET'])
+def list_categories():
+    categories = Category.query.all()
+    return jsonify([category.name for category in categories]), 200
+
+# Liist animals by categories
+@app.route('/animals/categories/<category_name>', methods=['GET'])
+def get_animals_by_category(category_name):
+    category = Category.query.filter_by(name=category_name).first()
+    if category:
+        animals = Animal.query.filter_by(category_id=category.id).all()
+        return jsonify([animal.serialize() for animal in animals]), 200
+    return jsonify({'message': 'Category not found'}), 404
+
+@app.route('/categories', methods=['POST'])
+@jwt_required()
+def add_category():
+    claims = get_jwt_identity()
+    if claims['role'] != 'farmer':
+        return jsonify({'message': 'Unauthorized'}), 403
+    category_name = request.json['name']
+    if Category.query.filter_by(name=category_name).first():
+        return jsonify({'message': 'Category already exists'}), 409
+    new_category = Category(name=category_name)
+    db.session.add(new_category)
+    db.session.commit()
+    return jsonify({'message': 'Category added successfully'}), 201
+
+
+@app.route('/cart', methods=['GET'])
+@jwt_required()
+def get_cart():
+    claims = get_jwt_identity()
+    user_id = claims['id']
+    cart = Cart.query.filter_by(user_id=user_id, status='Pending').first()
+    if not cart:
+        return jsonify({'message': 'Cart not found'}), 404
+    return jsonify(cart.serialize()), 200
+
+@app.route('/cart', methods=['POST'])
+@jwt_required()
+def add_to_cart():
+    claims = get_jwt_identity()
+    user_id = claims['id']
+    data = request.get_json()
+    animal_id = data.get('animal_id')
+    quantity = data.get('quantity', 1)
+
+    animal = Animal.query.get(animal_id)
+    if not animal:
+        return jsonify({'message': 'Animal not found'}), 404
+
+    cart = Cart.query.filter_by(user_id=user_id, status='Pending').first()
+    if not cart:
+        cart = Cart(user_id=user_id, total_price=0)
+        db.session.add(cart)
+        db.session.commit()
+
+    cart_item = CartItem.query.filter_by(cart_id=cart.id, animal_id=animal_id).first()
+    if cart_item:
+        cart_item.quantity += quantity
+    else:
+        cart_item = CartItem(cart_id=cart.id, animal_id=animal_id, quantity=quantity, unit_price=animal.price)
+        db.session.add(cart_item)
+
+    cart.total_price += animal.price * quantity
+    db.session.commit()
+    return jsonify({'message': 'Item added to cart'}), 201
+
+@app.route('/cart/item/<int:cart_item_id>', methods=['DELETE'])
+@jwt_required()
+def remove_from_cart(cart_item_id):
+    claims = get_jwt_identity()
+    user_id = claims['id']
+
+    cart_item = CartItem.query.get(cart_item_id)
+    if not cart_item:
+        return jsonify({'message': 'Cart item not found'}), 404
+
+    cart = Cart.query.filter_by(id=cart_item.cart_id, user_id=user_id, status='Pending').first()
+    if not cart:
+        return jsonify({'message': 'Cart not found'}), 404
+
+    cart.total_price -= cart_item.unit_price * cart_item.quantity
+    db.session.delete(cart_item)
+    db.session.commit()
+    return jsonify({'message': 'Item removed from cart'}), 200
+
+@app.route('/cart/checkout', methods=['POST'])
+@jwt_required()
+def checkout_cart():
+    claims = get_jwt_identity()
+    user_id = claims['id']
+    cart = Cart.query.filter_by(user_id=user_id, status='Pending').first()
+    if not cart:
+        return jsonify({'message': 'Cart not found'}), 404
+
+    cart.status = 'Confirmed'
+    db.session.commit()
+    return jsonify({'message': 'Checkout successful'}), 200
+
+# Farmer Routes to See Orders
+
+@app.route('/farmer/orders', methods=['GET'])
+@jwt_required()
+def get_farmer_orders():
+    claims = get_jwt_identity()
+    if claims['role'] != 'farmer':
+        return jsonify({'message': 'Unauthorized'}), 403
+
+    farmer_id = claims['id']
+    animals = Animal.query.filter_by(farmer_id=farmer_id).all()
+    animal_ids = [animal.id for animal in animals]
+
+    cart_items = CartItem.query.filter(CartItem.animal_id.in_(animal_ids)).all()
+    orders = {}
+    for item in cart_items:
+        if item.cart_id not in orders:
+            orders[item.cart_id] = []
+        orders[item.cart_id].append(item.serialize())
+
+    return jsonify(orders), 200
+
+# Error handling
+@app.errorhandler(404)
+def not_found_error(error):
+    print(error)
+    return jsonify({'message': 'Resource not found'}), 404
+
+@app.errorhandler(500)
+def internal_error(error):
+    db.session.rollback()
+    print(error)
+    return jsonify({'message': 'An internal error occurred'}), 500
+
+if __name__ == '__main__':
+  with app.app_context():
+    db.create_all()
+    app.run(debug=True, host='0.0.0.0')
