@@ -1,35 +1,57 @@
-from flask import Flask, request, jsonify
-from flask_sqlalchemy import SQLAlchemy
+from flask import Flask, request, jsonify, render_template, redirect, url_for, flash
 from flask_migrate import Migrate
+from models import db, User, Category, Farmer, Cart, CartItem, Animal
 from flask_cors import CORS
 from flask_bcrypt import Bcrypt
 from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
+import hmac
+import re
 import os
 
-# SQLAlchemy and MetaData setup
-from sqlalchemy import MetaData
-metadata = MetaData(naming_convention={
-    "fk": "fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s",
-})
+secret_key = os.urandom(16)
+print(secret_key.hex())
 
-db = SQLAlchemy(metadata=metadata)
+BASE_DIR = os.path.abspath(os.path.dirname(__file__))
+DATABASE = os.environ.get(
+    "DB_URI", f"sqlite:///{os.path.join(BASE_DIR, 'app.db')}")
 
-# Initialize Flask app
+
+# from dotenv import load_dotenv
+# load_dotenv()
+
 app = Flask(__name__)
-app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get("DB_URI", f"sqlite:///{os.path.join(os.path.abspath(os.path.dirname(__file__)), 'app.db')}")
+app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE
+# app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URI')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['SECRET_KEY'] = os.urandom(16).hex()  # It's better to set a stable secret key for production
-app.config['JWT_SECRET_KEY'] = os.urandom(16).hex()  # Stable key required for JWT in production as well
+app.json.compact = False
+app.config['SECRET_KEY'] = secret_key
+app.config['JWT_SECRET_KEY'] = secret_key
 CORS(app)
 bcrypt = Bcrypt(app)
 jwt = JWTManager(app)
+
+
 migrate = Migrate(app, db)
 
-# Ensure db is initialized after app configuration
 db.init_app(app)
 bcrypt.init_app(app)
 
-from models import User, Farmer, Category, Cart, CartItem, Animal
+# Import models after initializing db
+# from models import Animal, Farmer, User, Category, Cart, CartItem
+
+def safe_str_cmp(a, b):
+    return hmac.compare_digest(a, b)
+
+def validate_email(email):
+    valid = re.match(r"[^@]+@[^@]+\.[^@]+", email) is not None
+    print(f"Validating email '{email}': {'valid' if valid else 'invalid'}")
+    return valid
+
+def validate_username(username):
+    return len(username) >= 3
+
+def validate_password(password):
+    return len(password) >= 8
 
 @app.route('/register', methods=['POST'])
 def register():
@@ -101,7 +123,7 @@ def add_animal():
     db.session.commit()
     return jsonify({'message': 'Animal added successfully'}), 201
   
-@app.route('/farmer/animals/<int:animal_id>', methods=['PUT'])
+@app.route('/farmer/animals/<int:animal_id>', methods=['PATCH'])
 @jwt_required()
 def update_animal(animal_id):
     claims = get_jwt_identity()
@@ -122,20 +144,18 @@ def list_animals():
     animals = Animal.query.all()
     return jsonify([animal.serialize() for animal in animals]), 200
 
-# LIst animal categories
 @app.route('/animals/categories', methods=['GET'])
+# def search_animals_by_category(id):
+    # category = Category.query.filter(Category.id==id).first()
+    # if category:
+    #     animals = Animal.query.filter_by(category_id=category.id).all()
+    #     return jsonify([animal.serialize() for animal in animals]), 200
+    # else:
+    #     return jsonify({'message': 'Category not found'}), 404
+
 def list_categories():
     categories = Category.query.all()
-    return jsonify([category.name for category in categories]), 200
-
-# Liist animals by categories
-@app.route('/animals/categories/<category_name>', methods=['GET'])
-def get_animals_by_category(category_name):
-    category = Category.query.filter_by(name=category_name).first()
-    if category:
-        animals = Animal.query.filter_by(category_id=category.id).all()
-        return jsonify([animal.serialize() for animal in animals]), 200
-    return jsonify({'message': 'Category not found'}), 404
+    return jsonify([category.serialize() for category in categories]), 200
 
 @app.route('/categories', methods=['POST'])
 @jwt_required()

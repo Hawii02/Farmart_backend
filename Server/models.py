@@ -4,7 +4,6 @@ from sqlalchemy.orm import validates, relationship
 from sqlalchemy_serializer import SerializerMixin
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_bcrypt import Bcrypt
-from bcrypt import gensalt, hashpw
 import re
 
 metadata = MetaData(naming_convention={
@@ -20,6 +19,12 @@ class Category(db.Model, SerializerMixin):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(50), nullable=False, unique=True)
     animals = db.relationship('Animal', backref='category', lazy=True)
+
+    def serialize(self):
+        return {
+            'id': self.id,
+            'name': self.name,
+        }
 
     def __repr__(self):
         return f'<Category {self.name}>'
@@ -69,13 +74,15 @@ class Farmer(db.Model, SerializerMixin):
     address = db.Column(db.String(255))
     role = db.Column(db.String(10), nullable=False)
     animals = db.relationship('Animal', backref='farmer', lazy=True)
-    
+
     @validates('username')
     def validate_username(self, key, username):
+        if not username:
+            raise ValueError('Username is required.')
         if len(username) < 3:
             raise ValueError('Username must be at least 3 characters long.')
         return username
-
+    
     @validates('email')
     def validate_email(self, key, address):
         if not re.match(r"[^@]+@[^@]+\.[^@]+", address):
@@ -106,24 +113,39 @@ class User(db.Model):
     password_hash = db.Column(db.String(128))
     address = db.Column(db.String(255))
     role = db.Column(db.String(10), nullable=False)
+    carts = db.relationship('Cart', backref='user', lazy=True)
 
     @validates('username')
     def validate_username(self, key, username):
+        if not username:
+            raise ValueError('Username is required.')
         if len(username) < 3:
             raise ValueError('Username must be at least 3 characters long.')
         return username
-
+    
     @validates('email')
     def validate_email(self, key, address):
         if not re.match(r"[^@]+@[^@]+\.[^@]+", address):
             raise ValueError("Invalid email address")
         return address
+    
+    @validates('password_hash')
+    def validate_password(self, key, password):
+        password_regex = r'(?=.*\d)(?=.*[a-z])(?=.*[A-Z]).{8,}'
+        if not re.match(password_regex, password):
+            raise ValueError("Password must contain at least 8 characters, including one number, one lowercase and one uppercase letter.")
+        return generate_password_hash(password)
+
+    serialize_rules = ('-password_hash',)
 
     def set_password(self, password):
-        self.password_hash = bcrypt.generate_password_hash(password).decode('utf-8')
+        self.password_hash = generate_password_hash(password)
 
     def check_password(self, password):
-        return bcrypt.check_password_hash(self.password_hash, password)
+        return check_password_hash(self.password_hash, password)
+
+    def __repr__(self):
+        return f'<User {self.username}>'
     
 class Cart(db.Model):
     __tablename__ = 'carts'
