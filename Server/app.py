@@ -37,7 +37,6 @@ db.init_app(app)
 bcrypt.init_app(app)
 
 # Import models after initializing db
-# from models import Animal, Farmer, User, Category, Cart, CartItem
 
 def safe_str_cmp(a, b):
     return hmac.compare_digest(a, b)
