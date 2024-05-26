@@ -80,27 +80,27 @@ def register():
 
 @app.route('/login', methods=['POST'])
 def login():
-    data = request.get_argv
+    data = request.get_json()
     username = data.get('username')
     password = data.get('password')
     role = data.get('role', 'user').lower()
 
-    if role == 'farmer':
-        user = Farmer.query.filter_by(username=username, role=role).first()
-    else:
-        user = User.query.filter_by(username=username, role=role).first()
+    user = User.query.filter_by(username=username, role=role).first() if role == 'user' else Farmer.query.filter_by(username=username, role=role).first()
 
-    if user and user.check_password(password):
-        access_token = create_access_token(identity={'id': user.id, 'role': user.role, 'username': user.username})
-        return jsonify({
-            'message': 'Login successful',
-            'access_token': access_token,
-            'user_id': user.id,
-            'username': user.username,
-            'role': user.role
-        }), 200
-    else:
-        return jsonify({'message': 'Invalid username or password'}), 401
+    if not user:
+        return jsonify({'message': 'User not found or role mismatch'}), 401
+
+    if not user.check_password(password):
+        return jsonify({'message': 'Invalid password'}), 401
+
+    access_token = create_access_token(identity={'id': user.id, 'role': user.role, 'username': user.username})
+    return jsonify({
+        'message': 'Login successful',
+        'access_token': access_token,
+        'user_id': user.id,
+        'username': user.username,
+        'role': user.role
+    }), 200
 
 
 @app.route('/farmer/animals', methods=['POST'])
