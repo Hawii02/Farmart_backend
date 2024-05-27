@@ -42,7 +42,7 @@ class Animal(db.Model, SerializerMixin):
     image_url = db.Column(db.String(255))
     category_id = db.Column(db.Integer, db.ForeignKey('categories.id'))
 
-    @validates('price')
+    @validates(price)
     def validate_price(self, key, price):
         if price < 0:
             raise ValueError("Price must be non-negative.")

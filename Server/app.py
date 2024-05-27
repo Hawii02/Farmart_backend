@@ -103,17 +103,13 @@ def login():
 
 
 @app.route('/farmer/animals', methods=['POST'])
-@jwt_required()
 def add_animal():
-    claims = get_jwt_identity()
-    if claims['role'] != 'farmer':
-        return jsonify({'message': 'Unauthorized'}), 403
     new_animal = Animal(
         type=request.json['type'],
         breed=request.json['breed'],
         price=request.json['price'],
         description=request.json['description'],
-        farmer_id=claims['id'],
+        farmer_id = request.json['farmer_id'],
         status='Available'
     )
     if 'image_url' in request.json:
