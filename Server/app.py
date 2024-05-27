@@ -103,41 +103,73 @@ def login():
     }), 200
 
 
+# @app.route('/farmer/animals', methods=['POST'])
+# @jwt_required()
+# def add_animal():
+#     claims = get_jwt_identity()
+#     if claims['role'] != 'farmer':
+#         return jsonify({'message': 'Unauthorized'}), 403
+#     new_animal = Animal(
+#         type=request.json['type'],
+#         breed=request.json['breed'],
+#         price=request.json['price'],
+#         description=request.json['description'],
+#         farmer_id=claims['id'],
+#         status='Available'
+#     )
+#     if 'image_url' in request.json:
+#        new_animal.image_url = request.json['image_url']
+#     db.session.add(new_animal)
+#     db.session.commit()
+#     return jsonify({'message': 'Animal added successfully'}), 201
+  
+# @app.route('/farmer/animals/<int:animal_id>', methods=['PATCH'])
+# @jwt_required()
+# def update_animal(animal_id):
+#     claims = get_jwt_identity()
+#     animal = Animal.query.filter_by(id=animal_id, farmer_id=claims['id']).first()
+#     if animal:
+#         animal.type = request.json.get('type', animal.type)
+#         animal.breed = request.json.get('breed', animal.breed)
+#         animal.price = request.json.get('price', animal.price)
+#         animal.description = request.json.get('description', animal.description)
+#         animal.image_url = request.json['image_url']
+#         animal.status = request.json.get('status', animal.status)
+#         db.session.commit()
+#         return jsonify({'message': 'Animal updated successfully'}), 200
+#     return jsonify({'message': 'Animal not found'}), 404
+
 @app.route('/farmer/animals', methods=['POST'])
-@jwt_required()
 def add_animal():
-    claims = get_jwt_identity()
-    if claims['role'] != 'farmer':
-        return jsonify({'message': 'Unauthorized'}), 403
+    data = request.json
     new_animal = Animal(
-        type=request.json['type'],
-        breed=request.json['breed'],
-        price=request.json['price'],
-        description=request.json['description'],
-        farmer_id=claims['id'],
-        status='Available'
+        type=data['type'],
+        breed=data['breed'],
+        price=data['price'],
+        description=data['description'],
+        status=data.get('status', 'Available'),
+        image_url=data.get('image_url')
     )
-    if 'image_url' in request.json:
-       new_animal.image_url = request.json['image_url']
     db.session.add(new_animal)
     db.session.commit()
-    return jsonify({'message': 'Animal added successfully'}), 201
-  
+    return jsonify({'message': 'Animal added successfully', 'animal_id': new_animal.id}), 201
+
+# Keep the update route as is, assuming the `farmer_id` isn't involved
 @app.route('/farmer/animals/<int:animal_id>', methods=['PATCH'])
-@jwt_required()
 def update_animal(animal_id):
-    claims = get_jwt_identity()
-    animal = Animal.query.filter_by(id=animal_id, farmer_id=claims['id']).first()
-    if animal:
-        animal.type = request.json.get('type', animal.type)
-        animal.breed = request.json.get('breed', animal.breed)
-        animal.price = request.json.get('price', animal.price)
-        animal.description = request.json.get('description', animal.description)
-        animal.image_url = request.json['image_url']
-        animal.status = request.json.get('status', animal.status)
-        db.session.commit()
-        return jsonify({'message': 'Animal updated successfully'}), 200
-    return jsonify({'message': 'Animal not found'}), 404
+    animal = Animal.query.get(animal_id)
+    if not animal:
+        return jsonify({'message': 'Animal not found'}), 404
+
+    data = request.json
+    animal.type = data.get('type', animal.type)
+    animal.breed = data.get('breed', animal.breed)
+    animal.price = data.get('price', animal.price)
+    animal.description = data.get('description', animal.description)
+    animal.status = data.get('status', animal.status)
+    animal.image_url = data.get('image_url', animal.image_url)
+    db.session.commit()
+    return jsonify({'message': 'Animal updated successfully'}), 200
 
 @app.route('/animals', methods=['GET'])
 def list_animals():
