@@ -154,7 +154,7 @@ def add_animal():
     db.session.commit()
     return jsonify({'message': 'Animal added successfully', 'animal_id': new_animal.id}), 201
 
-# Keep the update route as is, assuming the `farmer_id` isn't involved
+
 @app.route('/farmer/animals/<int:animal_id>', methods=['PATCH'])
 def update_animal(animal_id):
     animal = Animal.query.get(animal_id)
@@ -170,6 +170,16 @@ def update_animal(animal_id):
     animal.image_url = data.get('image_url', animal.image_url)
     db.session.commit()
     return jsonify({'message': 'Animal updated successfully'}), 200
+
+@app.route('/farmer/animals/<int:animal_id>', methods=['DELETE'])
+def delete_animal(animal_id):
+    animal = Animal.query.get(animal_id)
+    if not animal:
+        return jsonify({'message': 'Animal not found'}), 404
+
+    db.session.delete(animal)
+    db.session.commit()
+    return jsonify({'message': 'Animal deleted successfully'}), 200
 
 @app.route('/animals', methods=['GET'])
 def list_animals():
