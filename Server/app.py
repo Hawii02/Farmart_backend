@@ -119,10 +119,10 @@ def add_animal():
     return jsonify({'message': 'Animal added successfully'}), 201
   
 @app.route('/farmer/animals/<int:animal_id>', methods=['PATCH'])
-@jwt_required()
+# @jwt_required()
 def update_animal(animal_id):
-    claims = get_jwt_identity()
-    animal = Animal.query.filter_by(id=animal_id, farmer_id=claims['id']).first()
+    # claims = get_jwt_identity()
+    animal = Animal.query.filter_by(id=animal_id, farmer_id=['id']).first()
     if animal:
         animal.type = request.json.get('type', animal.type)
         animal.breed = request.json.get('breed', animal.breed)
